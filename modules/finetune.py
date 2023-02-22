@@ -1,11 +1,11 @@
 from datetime import datetime
-from sched import scheduler
 from typing import Optional
 
 import datasets
 import torch
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer, seed_everything
 from torch.utils.data import DataLoader
+from torchmetrics import Accuracy, MatthewsCorrCoef, F1Score, ExactMatch
 from transformers import (
     AdamW,
     AutoConfig,
@@ -14,12 +14,32 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
-class GLUETransformer(LightningModule):
+class superGLUE_Transformer(LightningModule):
+
+    super_glue_tasks_metrics = {
+        "boolq": ["binary_accuracy"],
+        "cb": ["multiclass_f1", "multiclass_accuracy"],
+        "copa": ["binary_accuracy"],
+        "multirc": ["f1", "exact_match"],
+        "rte": ["binary_accuracy"],
+        "axg": ["binary_accuracy"],
+        "axb": ["matthews_corrcoef"],
+    }
+
+    mn_metric = {
+        "binary_accuracy": Accuracy(task='binary'),
+        "multiclass_accuracy": Accuracy(task='multiclass', num_classes=3),
+        "multiclass_f1": F1Score(task='multiclass', num_classes=3),
+        "f1": F1Score(task='binary'),
+        "matthews_corrcoef": MatthewsCorrCoef(task='binary'),
+        "exact_match": ExactMatch(task='multiclass', num_classes=2),
+    }
+
     def __init__(
         self,
         model_name_or_path: str,
         num_labels: int,
-        task_name: str = "cola",
+        task_name: str = "boolq",
         learning_rate: float = 2e-5,
         adam_epsilon: float = 1e-8,
         warmup_steps: int = 0,
@@ -34,17 +54,20 @@ class GLUETransformer(LightningModule):
         self.save_hyperparameters()
 
         self.config = AutoConfig.from_pretrained(model_name_or_path, num_labels=num_labels)
+
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, config=self.config)
-        self.metric = datasets.load_metric("glue", self.hparams.task_name, experiment_id=datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
+        self.metrics = [(mn, self.mn_metric[mn]) for mn in self.super_glue_tasks_metrics[task_name]]
 
     def forward(self, **inputs):
-        import pdb; pdb.set_trace()
         return self.model(**inputs)
 
     def training_step(self, batch, batch_idx):
         outputs = self(**batch)
         loss = outputs[0]
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        for mn, metric in self.metrics:
+            ms = metric(torch.argmax(outputs[1], axis=1), batch["labels"])
+            self.log("train_"+mn, ms, prog_bar=True, logger=True)
         return loss
     
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
@@ -56,26 +79,21 @@ class GLUETransformer(LightningModule):
             preds = logits.squeeze()
         labels = batch["labels"]
         self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        #self.log("val_acc", self.metric.compute(predictions=preds, references=labels)["accuracy"], on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        return {"loss": val_loss, "preds": preds, "labels": labels}
+        x = {"loss": val_loss, "preds": preds, "labels": labels}
+        for mn, metric in self.metrics:
+            ms = metric(torch.argmax(outputs[1], axis=1), batch["labels"])
+            self.log("val_"+mn, ms, prog_bar=True, logger=True)
+            x["val_"+mn] = ms
+        return x
 
     def validation_epoch_end(self, outputs):
-        if self.hparams.task_name == "mnli":
-            for i, output in enumerate(outputs):
-                split = self.hparams.eval_splits[i].split("_")[-1]
-                preds = torch.cat([x["preds"] for x in output]).detach().cpu().numpy()
-                labels = torch.cat([x["labels"] for x in output]).detach().cpu().numpy()
-                loss = torch.stack([x["loss"] for x in output]).mean()
-                self.log(f"val_loss_{split}", loss, prog_bar=True)
-                split_metrics = {f"{k}_{split}": v for k, v in self.metric.compute(predictions=preds, references=labels).items()}
-                self.log_dict(split_metrics, prog_bar=True)
-            return loss
-        
         preds = torch.cat([x["preds"] for x in outputs]).detach().cpu().numpy()
         labels = torch.cat([x["labels"] for x in outputs]).detach().cpu().numpy()
         loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log("val_loss", loss, prog_bar=True)
-        self.log_dict(self.metric.compute(predictions=preds, references=labels), prog_bar=True)
+        for mn, _ in self.metrics:
+            avg_sc = torch.stack([x["val_"+mn] for x in outputs]).mean()
+        self.log("avg_val_loss", loss, prog_bar=True)
+        self.log("avg_val_"+mn, avg_sc, prog_bar=True)
 
     def configure_optimizers(self):
         model = self.model

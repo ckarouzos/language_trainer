@@ -6,51 +6,46 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 
-class GLUEDataModule(LightningDataModule):
+class SuperGLUEDataModule(LightningDataModule):
 
     task_text_field_map = {
-        "cola": ["sentence"],
-        "sst2": ["sentence"],
-        "mrpc": ["sentence1", "sentence2"],
-        "qqp": ["question1", "question2"],
-        "stsb": ["sentence1", "sentence2"],
-        "mnli": ["premise","hypothesis"],
-        "qnli": ["question", "sentence"],
-        "rte": ["sentence1", "sentence2"],
-        "wnli": ["sentence1", "sentence2"],
-        "ax": ["premise", "hypothesis"],
+        "boolq": ("question", "passage"),
+        "cb": ("premise", "hypothesis"),
+        "copa": ("premise", "choice1", "choice2", "question"),
+        "multirc": ("paragraph", "question", "answer"),
+        "rte": ("premise", "hypothesis"),
+        "axg": ("premise", "hypothesis"),
+        "axb": ("sentence1", "sentence2"),
     }
 
-    glue_tasks_num_labels = {
-        "cola": 2,
-        "sst2": 2,
-        "mrpc": 2,
-        "qqp": 2,
-        "stsb": 1,
-        "mnli": 3,
-        "qnli": 2,
+    super_glue_tasks_num_labels = {
+        "boolq": 2,
+        "cb": 3,
+        "copa": 2,
+        "multirc": 2,
         "rte": 2,
-        "wnli": 2,
-        "ax": 3,
+        "axg": 2,
+        "axb": 2,
     }
-
+    
     loader_columns = [
-        "datasets_idx",
-        "input_ids",
-        "token_type_ids",
-        "attention_mask",
-        "start_positions",
-        "end_positions",
-        "labels",
+        'datasets_idx',
+        'input_ids',
+        'token_type_ids',
+        'attention_mask',
+        'start_positions',
+        'end_positions',
+        'labels'
     ]
 
     def __init__(
         self,
         model_name_or_path: str,
-        task_name: str = "cola",
+        task_name: str = "boolq",
         max_seq_length: Optional[int] = 128,
         train_batch_size: int = 32,
         eval_batch_size: int = 32,
+        num_workers: int = 8,
         **kwargs,
     ):
         super().__init__()
@@ -59,13 +54,14 @@ class GLUEDataModule(LightningDataModule):
         self.max_seq_length = max_seq_length
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
+        self.num_workers = num_workers
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path, use_fast=True)
         self.text_fields = self.task_text_field_map[task_name]
-        self.num_labels = self.glue_tasks_num_labels[task_name]
+        self.num_labels = self.super_glue_tasks_num_labels[task_name]
 
     def setup(self, stage: str):
-        self.dataset = datasets.load_dataset("glue", self.task_name)
+        self.dataset = datasets.load_dataset("super_glue", self.task_name)
 
         for split in self.dataset.keys():
             self.dataset[split] = self.dataset[split].map(
@@ -79,23 +75,23 @@ class GLUEDataModule(LightningDataModule):
         self.eval_splits = [x for x in self.dataset.keys() if "validation" in x]
 
     def prepare_data(self):
-        datasets.load_dataset("glue", self.task_name)
+        datasets.load_dataset("super_glue", self.task_name)
         AutoTokenizer.from_pretrained(self.model_name_or_path, use_fast=True)
 
     def train_dataloader(self):
-        return DataLoader(self.dataset["train"], batch_size=self.train_batch_size, shuffle=True)
+        return DataLoader(self.dataset["train"], batch_size=self.train_batch_size, shuffle=True, num_workers=self.num_workers)
 
     def val_dataloader(self):
         if len(self.eval_splits) == 1:
-            return DataLoader(self.dataset["validation"], batch_size=self.eval_batch_size)
+            return DataLoader(self.dataset["validation"], batch_size=self.eval_batch_size, num_workers=self.num_workers)
         elif len(self.eval_splits) > 1:
-            return [DataLoader(self.dataset[x], batch_size=self.eval_batch_size) for x in self.eval_splits]
+            return [DataLoader(self.dataset[x], batch_size=self.eval_batch_size, num_workers=self.num_workers) for x in self.eval_splits]
     
     def test_dataloader(self):
         if len(self.eval_splits) == 1:
-            return DataLoader(self.dataset["test"], batch_size=self.eval_batch_size)
+            return DataLoader(self.dataset["test"], batch_size=self.eval_batch_size, num_workers=self.num_workers)
         elif len(self.eval_splits) > 1:
-            return [DataLoader(self.dataset[x], batch_size=self.eval_batch_size) for x in self.eval_splits]
+            return [DataLoader(self.dataset[x], batch_size=self.eval_batch_size, num_workers=self.num_workers) for x in self.eval_splits]
     
     def convert_to_features(self, example_batch, indices=None):
         if len(self.text_fields) > 1:

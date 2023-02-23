@@ -16,6 +16,7 @@ class SuperGLUEDataModule(LightningDataModule):
         "rte": ("premise", "hypothesis"),
         "axg": ("premise", "hypothesis"),
         "axb": ("sentence1", "sentence2"),
+        "wic": ("sentence1", "sentence2"),
     }
 
     super_glue_tasks_num_labels = {
@@ -26,6 +27,7 @@ class SuperGLUEDataModule(LightningDataModule):
         "rte": 2,
         "axg": 2,
         "axb": 2,
+        "wic": 2,
     }
     
     loader_columns = [

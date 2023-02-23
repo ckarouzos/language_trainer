@@ -24,6 +24,7 @@ class superGLUE_Transformer(LightningModule):
         "rte": ["binary_accuracy"],
         "axg": ["binary_accuracy"],
         "axb": ["matthews_corrcoef"],
+        "wic": ["binary_accuracy"],
     }
 
     mn_metric = {

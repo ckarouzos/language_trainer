@@ -5,6 +5,7 @@ import datasets
 import torch
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer, seed_everything
 from torch.utils.data import DataLoader
+from torch.nn import ModuleDict
 from torchmetrics import Accuracy, MatthewsCorrCoef, F1Score, ExactMatch
 from transformers import (
     AdamW,
@@ -27,15 +28,6 @@ class superGLUE_Transformer(LightningModule):
         "wic": ["binary_accuracy"],
     }
 
-    mn_metric = {
-        "binary_accuracy": Accuracy(task='binary'),
-        "multiclass_accuracy": Accuracy(task='multiclass', num_classes=3),
-        "multiclass_f1": F1Score(task='multiclass', num_classes=3),
-        "f1": F1Score(task='binary'),
-        "matthews_corrcoef": MatthewsCorrCoef(task='binary'),
-        "exact_match": ExactMatch(task='multiclass', num_classes=2),
-    }
-
     def __init__(
         self,
         model_name_or_path: str,
@@ -56,8 +48,17 @@ class superGLUE_Transformer(LightningModule):
 
         self.config = AutoConfig.from_pretrained(model_name_or_path, num_labels=num_labels)
 
+        self.mn_metric = ModuleDict({
+            "binary_accuracy": Accuracy(task='binary'),
+            "multiclass_accuracy": Accuracy(task='multiclass', num_classes=3),
+            "multiclass_f1": F1Score(task='multiclass', num_classes=3),
+            "f1": F1Score(task='binary'),
+            "matthews_corrcoef": MatthewsCorrCoef(task='binary'),
+            "exact_match": ExactMatch(task='multiclass', num_classes=2),
+        })
+
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, config=self.config)
-        self.metrics = [(mn, self.mn_metric[mn]) for mn in self.super_glue_tasks_metrics[task_name]]
+        self.metrics = ModuleDict({mn: self.mn_metric[mn] for mn in self.super_glue_tasks_metrics[task_name]})
 
     def forward(self, **inputs):
         return self.model(**inputs)
@@ -66,9 +67,10 @@ class superGLUE_Transformer(LightningModule):
         outputs = self(**batch)
         loss = outputs[0]
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        for mn, metric in self.metrics:
+        for mn in self.metrics:
+            metric = self.metrics[mn]
             ms = metric(torch.argmax(outputs[1], axis=1), batch["labels"])
-            self.log("train_"+mn, ms, prog_bar=True, logger=True)
+            self.log("train_"+mn, ms, prog_bar=False, logger=True)
         return loss
     
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
@@ -81,7 +83,8 @@ class superGLUE_Transformer(LightningModule):
         labels = batch["labels"]
         self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         x = {"loss": val_loss, "preds": preds, "labels": labels}
-        for mn, metric in self.metrics:
+        for mn in self.metrics:
+            metric = self.metrics[mn]
             ms = metric(torch.argmax(outputs[1], axis=1), batch["labels"])
             self.log("val_"+mn, ms, prog_bar=True, logger=True)
             x["val_"+mn] = ms
@@ -91,7 +94,7 @@ class superGLUE_Transformer(LightningModule):
         preds = torch.cat([x["preds"] for x in outputs]).detach().cpu().numpy()
         labels = torch.cat([x["labels"] for x in outputs]).detach().cpu().numpy()
         loss = torch.stack([x["loss"] for x in outputs]).mean()
-        for mn, _ in self.metrics:
+        for mn in self.metrics:
             avg_sc = torch.stack([x["val_"+mn] for x in outputs]).mean()
         self.log("avg_val_loss", loss, prog_bar=True)
         self.log("avg_val_"+mn, avg_sc, prog_bar=True)

@@ -47,7 +47,7 @@ class SuperGLUEDataModule(LightningDataModule):
         max_seq_length: Optional[int] = 128,
         train_batch_size: int = 32,
         eval_batch_size: int = 32,
-        num_workers: int = 8,
+        num_workers: int = 2,
         **kwargs,
     ):
         super().__init__()

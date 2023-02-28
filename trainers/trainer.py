@@ -4,13 +4,14 @@ from datamodules.supergluedatamodule import SuperGLUEDataModule
 from modules.finetune import superGLUE_Transformer
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning import loggers as pl_loggers
+from pytorch_lightning.callbacks import TQDMProgressBar
 
 
 if __name__ =="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--task_name", type=str, default="wic")
-    parser.add_argument("--model_name_or_path", type=str, default="roberta-base")
-    parser.add_argument("--max_epochs", type=int, default=1)
+    parser.add_argument("--model_name_or_path", type=str, default="../models/roberta-base")
+    parser.add_argument("--max_epochs", type=int, default=10)
     args = parser.parse_args()
     task_name = args.task_name
     model_name_or_path = args.model_name_or_path
@@ -32,5 +33,6 @@ if __name__ =="__main__":
         accelerator="auto",
         devices=1 if torch.cuda.is_available() else None,
         logger=tb_logger,
+        callbacks=[TQDMProgressBar(refresh_rate=50)]
     )
     trainer.fit(model, dm)

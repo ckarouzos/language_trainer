@@ -1,17 +1,13 @@
-from datetime import datetime
 from typing import Optional
 
-import datasets
 import torch
-from pytorch_lightning import LightningDataModule, LightningModule, Trainer, seed_everything
-from torch.utils.data import DataLoader
+from pytorch_lightning import LightningModule
 from torch.nn import ModuleDict
 from torchmetrics import Accuracy, MatthewsCorrCoef, F1Score, ExactMatch
 from transformers import (
     AdamW,
     AutoConfig,
     AutoModelForSequenceClassification,
-    AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
 

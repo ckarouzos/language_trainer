@@ -11,12 +11,14 @@ class SuperGLUEDataModule(LightningDataModule):
     task_text_field_map = {
         "boolq": ("question", "passage"),
         "cb": ("premise", "hypothesis"),
+        "rte": ("premise", "hypothesis"),
+        "wic": ("sentence1", "sentence2", "word"),
         "copa": ("premise", "choice1", "choice2", "question"),
         "multirc": ("paragraph", "question", "answer"),
-        "rte": ("premise", "hypothesis"),
+        "record": ("", ""),
         "axg": ("premise", "hypothesis"),
         "axb": ("sentence1", "sentence2"),
-        "wic": ("sentence1", "sentence2"),
+        "wsc": ("sentence1", "sentence2"),
     }
 
     super_glue_tasks_num_labels = {

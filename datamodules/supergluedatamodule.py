@@ -53,8 +53,8 @@ class SuperGLUEDataModule(LightningDataModule):
         model_name_or_path: str,
         task_name: str = "boolq",
         max_seq_length: Optional[int] = 512,
-        train_batch_size: int = 32,
-        eval_batch_size: int = 32,
+        train_batch_size: int = 16,
+        eval_batch_size: int = 16,
         num_workers: int = 2,
         **kwargs,
     ):

@@ -239,8 +239,8 @@ class GLUE_Transformer(LightningModule):
         super().__init__()
 
         self.save_hyperparameters()
-        self.config = AutoConfig.from_pretrained(model_name_or_path, num_labels=num_labels)
-        self.model = AutoModelForSequenceClassification.from_pretrained(pretrained_model_name_or_path, strict=False)
+        self.config = AutoConfig.from_pretrained("../models/roberta-base", num_labels=num_labels)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, config=self.config)
         self.metrics = load('glue', task_name)
 
     def forward(self, **inputs):
@@ -275,7 +275,7 @@ class GLUE_Transformer(LightningModule):
         loss = torch.stack([x["loss"] for x in outputs]).mean()
         self.log("avg_val_loss", loss, prog_bar=True)
         split_metrics = {
-                    f"avg_{k}": v for k, v in self.metric.compute(predictions=preds, references=labels).items()
+                    f"avg_{k}": v for k, v in self.metrics.compute(predictions=preds, references=labels).items()
                 }
         self.log_dict(split_metrics, prog_bar=True)
 

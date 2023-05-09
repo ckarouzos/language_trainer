@@ -48,7 +48,7 @@ class GLUEDataModule(LightningDataModule):
         self,
         model_name_or_path: str,
         task_name: str = "cola",
-        max_seq_length: Optional[int] = 128,
+        max_seq_length: Optional[int] = 512,
         train_batch_size: int = 32,
         eval_batch_size: int = 32,
         **kwargs,

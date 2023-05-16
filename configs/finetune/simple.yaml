@@ -1,0 +1,18 @@
+data_arguments:
+  task_name: "record"
+  max_seq_length: 512
+  train_batch_size: 8
+  eval_batch_size: 8
+  num_workers: 4
+
+model_arguments:
+  seed: 42
+  model_name_or_path: "bert-base-uncased"
+  config_name: null
+  tokenizer_name: null
+  cache_dir: null
+  learning_rate: 5e-5
+  adam_epsilon: 1e-8
+  weight_decay: 0.0
+  max_epochs: 10
+  method: "finetune"

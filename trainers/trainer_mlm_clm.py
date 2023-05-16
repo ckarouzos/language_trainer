@@ -42,30 +42,16 @@ if __name__ == "__main__":
     dm.prepare_data()
     dm.setup("fit")
 
-    if data_args.task_name == "record":
-        model = superGLUE_Transformer_record(
-            model_name_or_path=model_args.model_name_or_path,
-            task_name=data_args.task_name,
-            num_labels=dm.num_labels,
-            learning_rate=model_args.learning_rate,
-            adam_epsilon=model_args.adam_epsilon,
-            warmup_steps=model_args.warmup_steps,
-            weight_decay=model_args.weight_decay,
-            train_batch_size=data_args.train_batch_size,
-            eval_batch_size=data_args.eval_batch_size,
-            eval_splits=dm.eval_splits,)
-    else:
-        model = superGLUE_Transformer(
-            model_name_or_path=model_args.model_name_or_path,
-            task_name=data_args.task_name,
-            num_labels=dm.num_labels,
-            learning_rate=model_args.learning_rate,
-            adam_epsilon=model_args.adam_epsilon,
-            warmup_steps=model_args.warmup_steps,
-            weight_decay=model_args.weight_decay,
-            train_batch_size=data_args.train_batch_size,
-            eval_batch_size=data_args.eval_batch_size,
-            eval_splits=dm.eval_splits,)
+    model = Transformer_MLM(
+        model_name_or_path=model_args.model_name_or_path,
+        learning_rate=model_args.learning_rate,
+        adam_epsilon=model_args.adam_epsilon,
+        warmup_steps=model_args.warmup_steps,
+        weight_decay=model_args.weight_decay,
+        train_batch_size=data_args.train_batch_size,
+        eval_batch_size=data_args.eval_batch_size,
+        eval_splits=dm.eval_splits,
+        method=model_args.method,)
 
     tb_logger = pl_loggers.TensorBoardLogger(save_dir="./", log_graph=True)
     trainer = Trainer(
@@ -77,7 +63,21 @@ if __name__ == "__main__":
     )
     trainer.fit(model, dm)
 
+
+    checkpoint = torch.load(trainer.checkpoint_callback.best_model_path)
+    state_dict = checkpoint['state_dict']
+    modified_state_dict = {}
+    for k, v in state_dict.items():
+        if k.startswith('model.roberta.'): # TODO fix this hack for roberta models only
+            modified_k = k[14:]
+        else:
+            modified_k = k
+        modified_state_dict[modified_k] = v
+    model = AutoModel.from_pretrained(model_args.model_name_or_path, state_dict=modified_state_dict)
+    output_dir = "../mlm_model"
+    model.save_pretrained(output_dir)
+    print("Model saved to %s" % output_dir)
     best_model_path = trainer.checkpoint_callback.best_model_path
     if best_model_path:
         print("Testing best model...")
-        #trainer.test(model=model, ckpt_path=best_model_path, datamodule=dm, verbose=True)
+        #trainer.test(model=model, ckpt_path=output_dir, datamodule=dm, verbose=True)

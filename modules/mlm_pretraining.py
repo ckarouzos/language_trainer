@@ -3,6 +3,7 @@ from typing import Optional
 import torch
 from pytorch_lightning import LightningModule
 from torch.nn import ModuleDict
+from modules.roberta_lm import RobertaForLM
 from transformers import (
     AdamW,
     AutoConfig,
@@ -22,6 +23,7 @@ class Transformer_MLM(LightningModule):
         train_batch_size: int = 32,
         eval_batch_size: int = 32,
         eval_splits: Optional[list] = None,
+        method: str = "mlm",
         **kwargs,
     ):
         super().__init__()
@@ -29,7 +31,10 @@ class Transformer_MLM(LightningModule):
         self.save_hyperparameters()
 
         self.config = AutoConfig.from_pretrained(model_name_or_path)
-        self.model = AutoModelForPreTraining.from_pretrained(model_name_or_path, config=self.config)
+        if method == "mlm":
+            self.model = AutoModelForPreTraining.from_pretrained(model_name_or_path, config=self.config)
+        elif method == "clm":
+            self.model = RobertaForLM.from_pretrained(model_name_or_path, config=self.config)
 
     def forward(self, input_ids, attention_mask):
         return self.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
